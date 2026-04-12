@@ -236,6 +236,45 @@
     }
     .card-pics { font-size:11px; color:var(--text-3); }
 
+    /* 카드 액션 버튼 */
+    .card-actions {
+      position:absolute; top:12px; right:12px;
+      display:flex; gap:5px;
+      opacity:0; pointer-events:none;
+      transition:opacity var(--ease);
+    }
+    .card:hover .card-actions { opacity:1; pointer-events:all; }
+    .card-act {
+      width:30px; height:30px; border-radius:8px; border:none;
+      display:flex; align-items:center; justify-content:center;
+      font-size:14px; background:var(--white); color:var(--text-2);
+      box-shadow:0 1px 6px var(--shadow-l);
+      transition:all var(--ease);
+    }
+    .card-act:hover { background:var(--terra); color:#fff; transform:scale(1.1); }
+    .card-act.del:hover { background:#c46060; color:#fff; }
+
+    /* 삭제 확인 팝오버 */
+    .confirm-pop {
+      position:fixed; inset:0; z-index:350;
+      display:flex; align-items:center; justify-content:center;
+      pointer-events:none; opacity:0; transition:opacity var(--ease);
+    }
+    .confirm-pop.on { opacity:1; pointer-events:all; }
+    .confirm-box {
+      background:var(--white); border-radius:16px;
+      padding:24px 28px; text-align:center;
+      box-shadow:0 8px 32px var(--shadow-l);
+      transform:scale(.94) translateY(8px);
+      transition:transform var(--ease);
+      max-width:300px; width:90%;
+    }
+    .confirm-pop.on .confirm-box { transform:none; }
+    .confirm-icon { font-size:32px; margin-bottom:10px; }
+    .confirm-msg { font-size:15px; color:var(--text-1); margin-bottom:4px; font-family:'Gowun Batang',serif; font-weight:700; }
+    .confirm-sub { font-size:12.5px; color:var(--text-3); margin-bottom:20px; }
+    .confirm-btns { display:flex; gap:8px; justify-content:center; }
+
     /* 빈 상태 */
     .empty {
       text-align:center; padding:80px 20px; color:var(--text-3);
@@ -569,8 +608,22 @@
     </div>
     <div class="modal-body" id="view-body"></div>
     <div class="modal-ft">
+      <button class="btn btn-d" id="view-del">🗑 삭제</button>
       <button class="btn btn-s" id="view-edit">✎ 수정</button>
       <button class="btn btn-p" id="view-close">닫기</button>
+    </div>
+  </div>
+</div>
+
+<!-- 삭제 확인 팝오버 -->
+<div class="confirm-pop" id="confirm-pop">
+  <div class="confirm-box">
+    <div class="confirm-icon">🗑️</div>
+    <div class="confirm-msg">일기를 삭제할까요?</div>
+    <div class="confirm-sub">삭제한 일기는 복구할 수 없어요</div>
+    <div class="confirm-btns">
+      <button class="btn btn-s" id="confirm-cancel" style="padding:9px 20px">취소</button>
+      <button class="btn btn-d" id="confirm-ok" style="margin-right:0;padding:9px 20px">삭제</button>
     </div>
   </div>
 </div>
@@ -805,6 +858,22 @@ function makeCard(entry) {
     </div>`;
 
   card.addEventListener('click', () => openView(entry));
+
+  // 호버 액션 버튼
+  const actions = document.createElement('div');
+  actions.className = 'card-actions';
+
+  const editBtn = document.createElement('button');
+  editBtn.className = 'card-act'; editBtn.title = '수정'; editBtn.textContent = '✎';
+  editBtn.addEventListener('click', e => { e.stopPropagation(); openWrite(entry); });
+
+  const delBtn = document.createElement('button');
+  delBtn.className = 'card-act del'; delBtn.title = '삭제'; delBtn.textContent = '🗑';
+  delBtn.addEventListener('click', e => { e.stopPropagation(); confirmDelete(entry.id); });
+
+  actions.appendChild(editBtn); actions.appendChild(delBtn);
+  card.appendChild(actions);
+
   return card;
 }
 
@@ -892,10 +961,22 @@ function saveEntry() {
   save(); closeWrite(); refresh();
 }
 
+// ── 삭제 확인 팝오버 ─────────────────────────────────────
+let _pendingDeleteId = null;
+
+function confirmDelete(id) {
+  _pendingDeleteId = id;
+  $('confirm-pop').classList.add('on');
+}
+
+function confirmClose() {
+  $('confirm-pop').classList.remove('on');
+  _pendingDeleteId = null;
+}
+
 function deleteEntry(id) {
-  if (!confirm('이 일기를 삭제할까요?')) return;
   entries = entries.filter(e=>e.id!==id);
-  save(); closeWrite(); closeView(); refresh();
+  save(); closeWrite(); closeView(); confirmClose(); refresh();
   toast('일기가 삭제되었어요');
 }
 
@@ -987,7 +1068,7 @@ function refresh() {
   $('write-x').addEventListener('click', closeWrite);
   $('write-cancel').addEventListener('click', closeWrite);
   $('save-btn').addEventListener('click', saveEntry);
-  $('del-btn').addEventListener('click', () => deleteEntry(editId));
+  $('del-btn').addEventListener('click', () => confirmDelete(editId));
   $('write-overlay').addEventListener('click', e => { if(e.target===$('write-overlay')) closeWrite(); });
 
   // textarea 자동 리사이즈
@@ -997,7 +1078,13 @@ function refresh() {
   $('view-x').addEventListener('click', closeView);
   $('view-close').addEventListener('click', closeView);
   $('view-edit').addEventListener('click', () => { closeView(); openWrite(viewEntry); });
+  $('view-del').addEventListener('click', () => confirmDelete(viewEntry?.id));
   $('view-overlay').addEventListener('click', e => { if(e.target===$('view-overlay')) closeView(); });
+
+  // 삭제 확인 팝오버
+  $('confirm-ok').addEventListener('click', () => { if(_pendingDeleteId) deleteEntry(_pendingDeleteId); });
+  $('confirm-cancel').addEventListener('click', confirmClose);
+  $('confirm-pop').addEventListener('click', e => { if(e.target===$('confirm-pop')) confirmClose(); });
 
   // 사진 업로드
   const ua = $('upload-area'), fi = $('file-inp');
